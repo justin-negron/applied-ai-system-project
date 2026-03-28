@@ -4,13 +4,25 @@
 
 **a. Initial design**
 
-- Briefly describe your initial UML design.
-- What classes did you include, and what responsibilities did you assign to each?
+Before jumping into code, I thought about what a pet owner would actually need to do with this app day to day. I came up with three core actions:
+
+1. **Enter pet and owner info** — The user should be able to set up a profile with basic details about themselves and their pet. This gives the app context for generating a good plan.
+2. **Add and edit care tasks** — The user needs to create tasks like walks, feeding, medications, grooming, etc., each with at least a duration and priority. They should also be able to update these as things change.
+3. **Generate a daily schedule** — Given the tasks and any constraints (like how much time they have), the app should produce a smart daily plan and explain why it organized things that way.
+
+I settled on five classes for the system:
+
+- **Pet** — holds basic pet info (name, species, breed, age). Keeps things simple with just a summary method. I used a dataclass here since it's really just structured data.
+- **Owner** — stores the owner's name, how many minutes they have available, and a reference to their Pet. Also a dataclass.
+- **Task** — represents a single care task (like "morning walk" or "give meds"). Each task has a category, duration, priority, and a completed flag. This is the core unit that everything else works with.
+- **Scheduler** — this is the brain. It takes a list of tasks and the available time, then figures out which tasks fit and in what order. It produces a DailyPlan.
+- **DailyPlan** — the output of the scheduler. It holds the tasks that made the cut, the ones that got skipped, and can explain the reasoning behind the choices.
+
+The main relationships are: Owner has a Pet, Scheduler takes in Tasks and outputs a DailyPlan.
 
 **b. Design changes**
 
-- Did your design change during implementation?
-- If yes, describe at least one change and why you made it.
+When I reviewed the skeleton with AI, one thing that came up was that the Owner class doesn't directly hold a list of tasks, there's no "Owner.tasks" attribute. I thought about adding one, but decided against it. The Streamlit app layer is a better place to manage the task list since that's where user interaction happens. Adding it to Owner would create tighter coupling without a real benefit. So I kept the design as-is, but it was good to think through that decision explicitly.
 
 ---
 
