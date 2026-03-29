@@ -4,7 +4,11 @@
 
 ## Demo
 
-<a href="/course_images/ai110/pawpal_demo.png" target="_blank"><img src='/course_images/ai110/pawpal_demo.png' title='PawPal App' width='' alt='PawPal App' class='center-block' /></a>
+![PawPal App](pawpal_demo.png)
+![PawPal App](pawpal_demo2.png)
+![PawPal App](pawpal_demo3.png)
+![PawPal App](pawpal_demo4.png)
+![PawPal App](pawpal_demo5.png)
 
 ## Features
 
