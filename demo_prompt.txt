@@ -1,0 +1,20 @@
+Set up our pet hotel for today. Add these employees first:                                               
+  - Jacob: 240 minutes available                                                                           
+  - Sierra: 360 minutes available                                                                          
+  - Noah: 360 minutes available                                                                            
+                                                                                                           
+  Then add these dogs and create realistic daily tasks for each based on their breed:                      
+  1. Bella — Golden Retriever, 3 years old                                                                 
+  2. Max — German Shepherd, 5 years old                                                                    
+  3. Coco — French Bulldog, 2 years old                                                                    
+  4. Rocky — Labrador Retriever, 1 year old (puppy energy)                                                 
+  5. Luna — Border Collie, 4 years old                                                                     
+  6. Daisy — Chihuahua, 8 years old                                                                        
+  7. Zeus — Rottweiler, 6 years old                                                                        
+  8. Mia — Miniature Poodle, 4 years old                                                                   
+                                                                                                           
+  For each dog add: walks (breed-appropriate duration), twice-daily feeding (10 min each), and any         
+  enrichment or grooming the breed needs. 
+  
+  Once everything is added, assign all tasks across the three      
+  employees.

@@ -165,7 +165,7 @@ else:
 st.divider()
 
 # --- AI Agent Chat ---
-st.subheader("🤖 Chat with PawPal+ Agent")
+st.subheader("🤖 Chat with PawPal AI Pro Agent")
 
 if st.session_state.owner is None:
     st.info("Complete Admin Setup above to start chatting with the agent.")
@@ -394,32 +394,36 @@ else:
             st.warning("Please enter a task name.")
 
     for pet in owner.pets:
-        if pet.tasks:
-            st.markdown(f"**{pet.name}'s Tasks:**")
+        # Only show tasks due today or earlier — future recurrences are hidden
+        # until their due date so completing a daily task doesn't look like it
+        # immediately comes back.
+        todays_tasks = [t for t in pet.tasks if t.is_due()]
+        if todays_tasks:
+            st.markdown(f"**{pet.name}'s Tasks (today):**")
             task_data = []
-            for task in pet.tasks:
+            for task in todays_tasks:
                 task_data.append({
                     "Task": task.name,
                     "Category": task.category,
                     "Duration": f"{task.duration} min",
                     "Priority": task.priority,
                     "Frequency": task.frequency,
-                    "Status": "Done" if task.completed else "Pending",
+                    "Status": "✅ Done" if task.completed else "Pending",
                 })
             st.table(task_data)
 
-            pending = pet.get_pending_tasks()
-            if pending:
+            pending_today = [t for t in todays_tasks if not t.completed]
+            if pending_today:
                 task_to_complete = st.selectbox(
                     f"Mark complete for {pet.name}",
-                    ["-- Select --"] + [t.name for t in pending],
+                    ["-- Select --"] + [t.name for t in pending_today],
                     key=f"complete_{pet.name}",
                 )
                 if st.button(f"Complete Task for {pet.name}", key=f"btn_complete_{pet.name}"):
                     if task_to_complete != "-- Select --":
                         next_task = pet.mark_task_complete(task_to_complete)
                         if next_task:
-                            st.success(f"'{task_to_complete}' completed! Next on {next_task.due_date}.")
+                            st.success(f"'{task_to_complete}' done! Next occurrence: {next_task.due_date}.")
                         else:
                             st.success(f"'{task_to_complete}' completed!")
                         st.rerun()
