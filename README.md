@@ -18,7 +18,7 @@ This is the AI 110 final project. It builds on **PawPal+ (Module 2)** — a Stre
 
 ## Demo
 
-📹 **[Loom video walkthrough — TODO add link before submission]**
+📹 **[Loom video walkthrough](https://www.loom.com/share/b302a9f8a7b84df187060855da15d9d3)**
 
 The video shows: loading the pet hotel demo (8 dogs, 3 employees), running the AI schedule, breed-specific RAG advice, and the diagnosis-refusal guardrail in action.
 
