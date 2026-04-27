@@ -3,7 +3,7 @@ import os
 import streamlit as st
 from dotenv import load_dotenv
 
-from pawpal_system import Owner, Pet, Task, Scheduler
+from pawpal_system import Owner, Pet, Task, Scheduler, Employee
 
 load_dotenv()
 
@@ -270,65 +270,155 @@ else:
 
 st.divider()
 
-# --- Generate Schedule ---
-st.subheader("Generate Daily Schedule")
+# --- Employee Management ---
+st.subheader("👥 Employees")
 
 if st.session_state.owner is None:
-    st.info("Set up your profile and add tasks first.")
-elif not st.session_state.owner.get_all_tasks():
-    st.info("Add some tasks before generating a schedule.")
+    st.info("Set up your owner profile first.")
 else:
     owner = st.session_state.owner
 
-    sort_option = st.radio("Sort tasks by:", ["Priority (recommended)", "Duration (shortest first)"], horizontal=True)
+    col1, col2 = st.columns(2)
+    with col1:
+        emp_name = st.text_input("Employee name", key="emp_name")
+    with col2:
+        emp_hours = st.number_input("Hours available today", min_value=1, max_value=12, value=6, key="emp_hours")
 
-    if st.button("Generate Schedule"):
-        all_tasks = owner.get_all_tasks()
-        scheduler = Scheduler(tasks=all_tasks, available_minutes=owner.available_minutes)
-
-        # Show conflict warnings
-        conflicts = scheduler.detect_conflicts()
-        if conflicts:
-            for warning in conflicts:
-                st.warning(warning)
-
-        plan = scheduler.generate_plan()
-
-        # Sort scheduled tasks based on user preference
-        if sort_option == "Duration (shortest first)":
-            plan.scheduled_tasks = scheduler.sort_by_time(plan.scheduled_tasks)
-
-        # Display scheduled tasks
-        st.markdown("### Today's Plan")
-        if plan.scheduled_tasks:
-            scheduled_data = []
-            for i, task in enumerate(plan.scheduled_tasks, 1):
-                scheduled_data.append({
-                    "#": i,
-                    "Task": task.name,
-                    "Category": task.category,
-                    "Duration": f"{task.duration} min",
-                    "Priority": task.priority,
-                })
-            st.table(scheduled_data)
-            st.success(f"Total scheduled time: {plan.total_time_used} / {owner.available_minutes} minutes")
+    if st.button("Add Employee"):
+        if emp_name.strip():
+            for existing in owner.employees:
+                if existing.name.lower() == emp_name.strip().lower():
+                    st.warning(f"{emp_name.strip()} is already on the team.")
+                    break
+            else:
+                owner.add_employee(Employee(name=emp_name.strip(), available_minutes=emp_hours * 60))
+                st.rerun()
         else:
-            st.info("No pending tasks to schedule.")
+            st.warning("Please enter an employee name.")
 
-        # Display skipped tasks
-        if plan.skipped_tasks:
-            st.markdown("### Skipped Tasks")
-            skipped_data = []
-            for task in plan.skipped_tasks:
-                skipped_data.append({
-                    "Task": task.name,
-                    "Category": task.category,
-                    "Duration": f"{task.duration} min",
-                    "Priority": task.priority,
-                    "Reason": "Not enough time",
-                })
-            st.table(skipped_data)
+    if owner.employees:
+        st.markdown("**Current Team:**")
+        emp_data = []
+        for emp in owner.employees:
+            tasks_summary = (
+                ", ".join(f"{t['task']} ({t['pet']})" for t in emp.assigned_tasks)
+                if emp.assigned_tasks else "—"
+            )
+            emp_data.append({
+                "Name": emp.name,
+                "Available": f"{emp.available_minutes // 60}h {emp.available_minutes % 60}m",
+                "Assigned": f"{emp.minutes_used} min",
+                "Remaining": f"{emp.minutes_remaining} min",
+                "Tasks": tasks_summary,
+            })
+        st.table(emp_data)
+    else:
+        st.info("No employees added yet.")
 
-        # Reasoning
-        with st.expander("Why this plan?"):
-            st.text(plan.get_reasoning())
+st.divider()
+
+# --- AI-Powered Generate Schedule ---
+st.subheader("📋 Generate Today's Schedule")
+
+if st.session_state.owner is None:
+    st.info("Set up your profile, add pets and tasks first.")
+elif not st.session_state.owner.get_all_tasks():
+    st.info("Add some tasks before generating a schedule.")
+elif not st.session_state.owner.employees:
+    st.info("Add at least one employee before generating a schedule.")
+else:
+    owner = st.session_state.owner
+
+    st.caption(
+        "The AI will review all dogs, tasks, priorities, and employee schedules "
+        "to build the optimal assignment for today."
+    )
+
+    if st.button("✨ Generate AI Schedule", type="primary"):
+        try:
+            from agent import run_agent
+
+            emp_summary = ", ".join(
+                f"{e.name} ({e.available_minutes // 60}h {e.available_minutes % 60}m)"
+                for e in owner.employees
+            )
+            schedule_prompt = (
+                f"Generate today's full schedule. "
+                f"Team working today: {emp_summary}. "
+                f"Review all pet tasks and their priorities, then assign them to employees "
+                f"for maximum coverage — highest priority tasks first, balanced across the team. "
+                f"Summarize each employee's workload and flag anything that couldn't be assigned."
+            )
+
+            with st.spinner("AI is building the schedule..."):
+                result = run_agent(schedule_prompt, owner)
+
+            # Agent narrative
+            st.markdown("### AI Summary")
+            st.markdown(result.text)
+
+            # Structured per-employee tables drawn from live owner state
+            if any(emp.assigned_tasks for emp in owner.employees):
+                st.markdown("### Employee Assignments")
+                for emp in owner.employees:
+                    if emp.assigned_tasks:
+                        st.markdown(
+                            f"**{emp.name}** — {emp.minutes_used} / {emp.available_minutes} min used"
+                        )
+                        rows = [
+                            {
+                                "Pet": t["pet"],
+                                "Task": t["task"],
+                                "Category": t["category"],
+                                "Duration": f"{t['duration']} min",
+                                "Priority": t["priority"],
+                            }
+                            for t in emp.assigned_tasks
+                        ]
+                        st.table(rows)
+                    else:
+                        st.markdown(f"**{emp.name}** — no tasks assigned")
+
+            # Unassigned tasks
+            all_pending = owner.get_all_pending_tasks()
+            assigned_keys = {
+                (t["pet"], t["task"])
+                for emp in owner.employees
+                for t in emp.assigned_tasks
+            }
+            unassigned = [
+                t for pet in owner.pets for t in pet.get_pending_tasks()
+                if (pet.name, t.name) not in assigned_keys
+            ]
+            if unassigned:
+                st.markdown("### ⚠️ Could Not Assign")
+                st.table([
+                    {
+                        "Pet": next(p.name for p in owner.pets if t in p.tasks),
+                        "Task": t.name,
+                        "Duration": f"{t.duration} min",
+                        "Priority": t.priority,
+                    }
+                    for t in unassigned
+                ])
+
+            # Reasoning trace
+            if result.steps:
+                with st.expander(
+                    f"🔎 Agent reasoning ({len(result.tools_called)} tool calls"
+                    + (f", confidence {result.confidence:.2f}" if result.confidence else "")
+                    + ")"
+                ):
+                    for step in result.steps:
+                        if step.kind == "tool_call":
+                            st.markdown(f"🔧 **`{step.payload['name']}`**")
+                            st.code(str(step.payload.get("input", "")), language="json")
+                        elif step.kind == "tool_result":
+                            marker = "❌" if step.payload.get("is_error") else "✅"
+                            st.markdown(f"{marker} **Result:** `{step.payload['name']}`")
+                            st.code(step.payload.get("output", "")[:600], language="json")
+                        elif step.kind == "error":
+                            st.error(str(step.payload))
+
+        except Exception as e:
+            st.error(f"Schedule generation failed: {type(e).__name__}: {e}")
