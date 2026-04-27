@@ -24,8 +24,8 @@ from providers import Provider, select_provider
 
 load_dotenv()
 
-MAX_TURNS = 8  # Hard cap on tool-calling iterations per user message.
-MAX_TOKENS = 1024  # Anthropic free tier: 4K output tokens/min across 5 RPM → ~800/call.
+MAX_TURNS = 20  # Enough headroom for bulk setup (8 dogs × ~5 tasks + employees + assignment).
+MAX_TOKENS = 4096  # High enough to batch all tool calls for one dog without truncation.
 
 SYSTEM_PROMPT = """You are PawPal+, an AI assistant that helps pet owners manage daily pet care tasks. You have tools to read/modify pet and task data, manage employees, and search a curated knowledge base.
 
@@ -40,8 +40,11 @@ SYSTEM_PROMPT = """You are PawPal+, an AI assistant that helps pet owners manage
 6. To assign today's work to employees, call `assign_tasks_to_employees`. It distributes highest-priority tasks first to whoever has the most remaining time.
 7. Call `list_employees` before assigning to confirm who is working and how many minutes each has.
 
-# Adding pets — always clarify first
-8. Before calling `add_pet`, confirm the pet's species, breed, and age. If the user hasn't provided any of these, ask for them explicitly. Do not use placeholders like "unknown" — get the real values first.
+# Adding pets
+8. If species, breed, or age is missing from the user's message, ask for it before calling `add_pet`. If all three are already provided, call `add_pet` immediately — do not ask for confirmation.
+
+# Bulk setup
+9. When adding multiple pets or employees in one message, add them all via tool calls without stopping to ask questions or summarize progress. Process one dog's tasks completely before moving to the next dog.
 
 # Hard limits — never break
 - No medical diagnoses. Symptoms → tell them to see a vet.

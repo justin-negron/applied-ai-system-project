@@ -101,7 +101,7 @@ class AnthropicProvider(Provider):
             raise RuntimeError("ANTHROPIC_API_KEY is not set.")
         self._anthropic = anthropic
         self.client = anthropic.Anthropic()
-        self.model = os.getenv("ANTHROPIC_MODEL", "claude-opus-4-7")
+        self.model = os.getenv("ANTHROPIC_MODEL", "claude-sonnet-4-6")
         # Sliding-window rate-limiter state (shared across all calls on this instance).
         self._req_times: list[float] = []
         self._rate_lock = threading.Lock()
@@ -141,23 +141,23 @@ class AnthropicProvider(Provider):
                 cleaned.append(msg)
         return cleaned
 
+    # Models that support extended thinking (adaptive mode).
+    _THINKING_MODELS = {"claude-opus-4-7", "claude-sonnet-4-6"}
+
     def call(self, system, messages, tools, max_tokens):
         self._rate_limit_wait()
         clean_messages = self._strip_internal_fields(messages)
-        response = self.client.messages.create(
+        kwargs: dict = dict(
             model=self.model,
             max_tokens=max_tokens,
-            system=[
-                {
-                    "type": "text",
-                    "text": system,
-                    "cache_control": {"type": "ephemeral"},
-                }
-            ],
+            system=[{"type": "text", "text": system, "cache_control": {"type": "ephemeral"}}],
             tools=tools,
-            thinking={"type": "adaptive"},
             messages=clean_messages,
         )
+        # Adaptive thinking is only available on Opus and Sonnet; skip for Haiku.
+        if any(m in self.model for m in self._THINKING_MODELS):
+            kwargs["thinking"] = {"type": "adaptive"}
+        response = self.client.messages.create(**kwargs)
 
         blocks = []
         for b in response.content:

@@ -7,6 +7,113 @@ from pawpal_system import Owner, Pet, Task, Scheduler, Employee
 
 load_dotenv()
 
+
+def _seed_pet_hotel_demo(owner: Owner) -> None:
+    """Populate a realistic pet-hotel scenario: 3 staff + 8 dogs with breed-accurate tasks."""
+
+    # --- Employees ---
+    existing_emp_names = {e.name.lower() for e in owner.employees}
+    staff = [
+        ("Jacob", 240),   # 4-hour shift
+        ("Sierra", 360),  # 6-hour shift
+        ("Noah", 360),    # 6-hour shift
+    ]
+    for name, mins in staff:
+        if name.lower() not in existing_emp_names:
+            owner.add_employee(Employee(name=name, available_minutes=mins))
+
+    # --- Dogs + tasks ---
+    # Schema: (name, species, breed, age, [(task_name, category, duration, priority, frequency)])
+    existing_pet_names = {p.name.lower() for p in owner.pets}
+    dogs = [
+        (
+            "Bella", "Dog", "Golden Retriever", 3,
+            [
+                ("Morning Walk",    "walk",        30, "high",   "daily"),
+                ("Morning Feeding", "feeding",     10, "high",   "daily"),
+                ("Afternoon Play",  "enrichment",  20, "medium", "daily"),
+                ("Evening Walk",    "walk",        25, "medium", "daily"),
+                ("Evening Feeding", "feeding",     10, "high",   "daily"),
+                ("Coat Brushing",   "grooming",    15, "low",    "daily"),
+            ],
+        ),
+        (
+            "Max", "Dog", "German Shepherd", 5,
+            [
+                ("Morning Walk",      "walk",       30, "high",   "daily"),
+                ("Morning Feeding",   "feeding",    10, "high",   "daily"),
+                ("Training Session",  "enrichment", 20, "high",   "daily"),
+                ("Midday Potty",      "walk",       10, "medium", "daily"),
+                ("Evening Feeding",   "feeding",    10, "high",   "daily"),
+            ],
+        ),
+        (
+            "Coco", "Dog", "French Bulldog", 2,
+            [
+                ("Short Morning Walk", "walk",       15, "high",   "daily"),
+                ("Morning Feeding",    "feeding",    10, "high",   "daily"),
+                ("Indoor Play",        "enrichment", 15, "medium", "daily"),
+                ("Evening Feeding",    "feeding",    10, "high",   "daily"),
+            ],
+        ),
+        (
+            "Rocky", "Dog", "Labrador Retriever", 1,
+            [
+                ("Morning Walk",       "walk",       30, "high", "daily"),
+                ("Morning Feeding",    "feeding",    10, "high", "daily"),
+                ("Puppy Play Session", "enrichment", 30, "high", "daily"),
+                ("Midday Potty",       "walk",       10, "high", "daily"),
+                ("Evening Feeding",    "feeding",    10, "high", "daily"),
+            ],
+        ),
+        (
+            "Luna", "Dog", "Border Collie", 4,
+            [
+                ("Morning Run",          "walk",       45, "high", "daily"),
+                ("Morning Feeding",      "feeding",    10, "high", "daily"),
+                ("Mental Enrichment",    "enrichment", 30, "high", "daily"),
+                ("Evening Feeding",      "feeding",    10, "high", "daily"),
+            ],
+        ),
+        (
+            "Daisy", "Dog", "Chihuahua", 8,
+            [
+                ("Short Morning Walk", "walk",       10, "high", "daily"),
+                ("Morning Feeding",    "feeding",    10, "high", "daily"),
+                ("Afternoon Lap Time", "enrichment", 15, "low",  "daily"),
+                ("Evening Feeding",    "feeding",    10, "high", "daily"),
+            ],
+        ),
+        (
+            "Zeus", "Dog", "Rottweiler", 6,
+            [
+                ("Morning Walk",            "walk",       30, "high",   "daily"),
+                ("Morning Feeding",         "feeding",    10, "high",   "daily"),
+                ("Controlled Socialization","enrichment", 20, "medium", "daily"),
+                ("Evening Feeding",         "feeding",    10, "high",   "daily"),
+            ],
+        ),
+        (
+            "Mia", "Dog", "Miniature Poodle", 4,
+            [
+                ("Morning Walk",    "walk",      20, "high",   "daily"),
+                ("Morning Feeding", "feeding",   10, "high",   "daily"),
+                ("Coat Brushing",   "grooming",  20, "high",   "daily"),
+                ("Evening Feeding", "feeding",   10, "high",   "daily"),
+                ("Evening Walk",    "walk",      15, "medium", "daily"),
+            ],
+        ),
+    ]
+
+    for name, species, breed, age, tasks in dogs:
+        if name.lower() in existing_pet_names:
+            continue
+        pet = Pet(name=name, species=species, breed=breed, age=age)
+        for task_name, cat, dur, pri, freq in tasks:
+            pet.add_task(Task(name=task_name, category=cat, duration=dur, priority=pri, frequency=freq))
+        owner.add_pet(pet)
+
+
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 # Initialize session state - only runs once per session
@@ -19,7 +126,7 @@ if "chat_traces" not in st.session_state:
     # history that goes back to the model so we don't pollute the prompt.
     st.session_state.chat_traces = []
 
-st.title("🐾 PawPal+")
+st.title("🐾 PawPal AI Pro")
 
 st.markdown(
     "A pet care planning assistant that helps you stay on top of daily tasks. "
@@ -44,11 +151,17 @@ if st.session_state.owner is None:
 else:
     owner = st.session_state.owner
     st.success(f"Owner: {owner.name} | Available time: {owner.available_minutes} minutes")
-    if st.button("Reset Profile"):
-        st.session_state.owner = None
-        st.session_state.chat_history = []
-        st.session_state.chat_traces = []
-        st.rerun()
+    col_reset, col_demo = st.columns([1, 2])
+    with col_reset:
+        if st.button("Reset Profile"):
+            st.session_state.owner = None
+            st.session_state.chat_history = []
+            st.session_state.chat_traces = []
+            st.rerun()
+    with col_demo:
+        if st.button("🐾 Load Pet Hotel Demo", help="Pre-populate employees, dogs, and tasks for a realistic pet lodge scenario"):
+            _seed_pet_hotel_demo(st.session_state.owner)
+            st.rerun()
 
 st.divider()
 
@@ -317,7 +430,7 @@ else:
 
 st.divider()
 
-# --- AI-Powered Generate Schedule ---
+# --- Generate Schedule ---
 st.subheader("📋 Generate Today's Schedule")
 
 if st.session_state.owner is None:
@@ -328,44 +441,21 @@ elif not st.session_state.owner.employees:
     st.info("Add at least one employee before generating a schedule.")
 else:
     owner = st.session_state.owner
+    tab_quick, tab_ai = st.tabs(["⚡ Quick Schedule", "✨ AI Schedule"])
 
-    st.caption(
-        "The AI will review all dogs, tasks, priorities, and employee schedules "
-        "to build the optimal assignment for today."
-    )
+    # --- Quick (deterministic) ---
+    with tab_quick:
+        st.caption("Priority-based assignment using available employee time. Instant, no API call.")
+        if st.button("Generate Quick Schedule"):
+            result = owner.assign_tasks_to_employees()
 
-    if st.button("✨ Generate AI Schedule", type="primary"):
-        try:
-            from agent import run_agent
-
-            emp_summary = ", ".join(
-                f"{e.name} ({e.available_minutes // 60}h {e.available_minutes % 60}m)"
-                for e in owner.employees
-            )
-            schedule_prompt = (
-                f"Generate today's full schedule. "
-                f"Team working today: {emp_summary}. "
-                f"Review all pet tasks and their priorities, then assign them to employees "
-                f"for maximum coverage — highest priority tasks first, balanced across the team. "
-                f"Summarize each employee's workload and flag anything that couldn't be assigned."
-            )
-
-            with st.spinner("AI is building the schedule..."):
-                result = run_agent(schedule_prompt, owner)
-
-            # Agent narrative
-            st.markdown("### AI Summary")
-            st.markdown(result.text)
-
-            # Structured per-employee tables drawn from live owner state
-            if any(emp.assigned_tasks for emp in owner.employees):
-                st.markdown("### Employee Assignments")
-                for emp in owner.employees:
-                    if emp.assigned_tasks:
+            if any(info["tasks"] for info in result["assignments"].values()):
+                for emp_name, info in result["assignments"].items():
+                    if info["tasks"]:
                         st.markdown(
-                            f"**{emp.name}** — {emp.minutes_used} / {emp.available_minutes} min used"
+                            f"**{emp_name}** — {info['minutes_used']} / {info['available_minutes']} min used"
                         )
-                        rows = [
+                        st.table([
                             {
                                 "Pet": t["pet"],
                                 "Task": t["task"],
@@ -373,52 +463,110 @@ else:
                                 "Duration": f"{t['duration']} min",
                                 "Priority": t["priority"],
                             }
-                            for t in emp.assigned_tasks
-                        ]
-                        st.table(rows)
+                            for t in info["tasks"]
+                        ])
                     else:
-                        st.markdown(f"**{emp.name}** — no tasks assigned")
+                        st.markdown(f"**{emp_name}** — no tasks assigned")
+            else:
+                st.info("No pending tasks to assign.")
 
-            # Unassigned tasks
-            all_pending = owner.get_all_pending_tasks()
-            assigned_keys = {
-                (t["pet"], t["task"])
-                for emp in owner.employees
-                for t in emp.assigned_tasks
-            }
-            unassigned = [
-                t for pet in owner.pets for t in pet.get_pending_tasks()
-                if (pet.name, t.name) not in assigned_keys
-            ]
-            if unassigned:
+            if result["unassigned"]:
                 st.markdown("### ⚠️ Could Not Assign")
                 st.table([
                     {
-                        "Pet": next(p.name for p in owner.pets if t in p.tasks),
-                        "Task": t.name,
-                        "Duration": f"{t.duration} min",
-                        "Priority": t.priority,
+                        "Task": t["task"],
+                        "Pet": t["pet"],
+                        "Duration": f"{t['duration']} min",
+                        "Priority": t["priority"],
                     }
-                    for t in unassigned
+                    for t in result["unassigned"]
                 ])
 
-            # Reasoning trace
-            if result.steps:
-                with st.expander(
-                    f"🔎 Agent reasoning ({len(result.tools_called)} tool calls"
-                    + (f", confidence {result.confidence:.2f}" if result.confidence else "")
-                    + ")"
-                ):
-                    for step in result.steps:
-                        if step.kind == "tool_call":
-                            st.markdown(f"🔧 **`{step.payload['name']}`**")
-                            st.code(str(step.payload.get("input", "")), language="json")
-                        elif step.kind == "tool_result":
-                            marker = "❌" if step.payload.get("is_error") else "✅"
-                            st.markdown(f"{marker} **Result:** `{step.payload['name']}`")
-                            st.code(step.payload.get("output", "")[:600], language="json")
-                        elif step.kind == "error":
-                            st.error(str(step.payload))
+    # --- AI-powered ---
+    with tab_ai:
+        st.caption(
+            "The AI reviews all dogs, tasks, priorities, and staff schedules to build "
+            "the optimal plan and explain its reasoning."
+        )
+        if st.button("✨ Generate AI Schedule", type="primary"):
+            try:
+                from agent import run_agent
 
-        except Exception as e:
-            st.error(f"Schedule generation failed: {type(e).__name__}: {e}")
+                emp_summary = ", ".join(
+                    f"{e.name} ({e.available_minutes // 60}h {e.available_minutes % 60}m)"
+                    for e in owner.employees
+                )
+                schedule_prompt = (
+                    f"Generate today's full schedule. "
+                    f"Team working today: {emp_summary}. "
+                    f"Review all pet tasks and their priorities, then assign them to employees "
+                    f"for maximum coverage — highest priority tasks first, balanced across the team. "
+                    f"Summarize each employee's workload and flag anything that couldn't be assigned."
+                )
+
+                with st.spinner("AI is building the schedule..."):
+                    result = run_agent(schedule_prompt, owner)
+
+                st.markdown("### AI Summary")
+                st.markdown(result.text)
+
+                if any(emp.assigned_tasks for emp in owner.employees):
+                    st.markdown("### Employee Assignments")
+                    for emp in owner.employees:
+                        if emp.assigned_tasks:
+                            st.markdown(
+                                f"**{emp.name}** — {emp.minutes_used} / {emp.available_minutes} min used"
+                            )
+                            st.table([
+                                {
+                                    "Pet": t["pet"],
+                                    "Task": t["task"],
+                                    "Category": t["category"],
+                                    "Duration": f"{t['duration']} min",
+                                    "Priority": t["priority"],
+                                }
+                                for t in emp.assigned_tasks
+                            ])
+                        else:
+                            st.markdown(f"**{emp.name}** — no tasks assigned")
+
+                assigned_keys = {
+                    (t["pet"], t["task"])
+                    for emp in owner.employees
+                    for t in emp.assigned_tasks
+                }
+                unassigned = [
+                    t for pet in owner.pets for t in pet.get_pending_tasks()
+                    if (pet.name, t.name) not in assigned_keys
+                ]
+                if unassigned:
+                    st.markdown("### ⚠️ Could Not Assign")
+                    st.table([
+                        {
+                            "Pet": next(p.name for p in owner.pets if t in p.tasks),
+                            "Task": t.name,
+                            "Duration": f"{t.duration} min",
+                            "Priority": t.priority,
+                        }
+                        for t in unassigned
+                    ])
+
+                if result.steps:
+                    with st.expander(
+                        f"🔎 Agent reasoning ({len(result.tools_called)} tool calls"
+                        + (f", confidence {result.confidence:.2f}" if result.confidence else "")
+                        + ")"
+                    ):
+                        for step in result.steps:
+                            if step.kind == "tool_call":
+                                st.markdown(f"🔧 **`{step.payload['name']}`**")
+                                st.code(str(step.payload.get("input", "")), language="json")
+                            elif step.kind == "tool_result":
+                                marker = "❌" if step.payload.get("is_error") else "✅"
+                                st.markdown(f"{marker} **Result:** `{step.payload['name']}`")
+                                st.code(step.payload.get("output", "")[:600], language="json")
+                            elif step.kind == "error":
+                                st.error(str(step.payload))
+
+            except Exception as e:
+                st.error(f"Schedule generation failed: {type(e).__name__}: {e}")

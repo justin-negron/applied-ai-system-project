@@ -93,15 +93,21 @@ So if you set both keys, Gemini wins by default; set `PAWPAL_PROVIDER=anthropic`
 
 #### Model selection
 
-You can override the specific model per provider:
-
 ```bash
 # .env
-GEMINI_MODEL=gemini-2.5-flash-lite    # default — fastest with function calling on free tier
-ANTHROPIC_MODEL=claude-opus-4-7       # default — most capable
+GEMINI_MODEL=gemini-2.5-flash-lite    # default — free tier, function calling supported
+ANTHROPIC_MODEL=claude-sonnet-4-6     # default — best cost/quality balance
 ```
 
-For Gemini, the default `gemini-2.5-flash-lite` is the model with the most generous free-tier quota that supports function calling. If you have a paid Gemini plan, set `GEMINI_MODEL=gemini-2.5-flash` for higher quality. For Anthropic, the default Opus 4.7 uses adaptive thinking + prompt caching; switch to `claude-haiku-4-5` for cheaper testing.
+Anthropic model cost guide (prompt caching reduces input cost ~10×):
+
+| Model | Input | Output | Good for |
+|---|---|---|---|
+| `claude-sonnet-4-6` | $3/MTok | $15/MTok | **Default** — high accuracy, affordable |
+| `claude-opus-4-7` | $15/MTok | $75/MTok | Maximum reasoning (set `ANTHROPIC_MODEL=claude-opus-4-7`) |
+| `claude-haiku-4-5` | $0.80/MTok | $4/MTok | Budget testing (set `ANTHROPIC_MODEL=claude-haiku-4-5`) |
+
+With the default settings (Sonnet, 1024 max output tokens, prompt caching), a full 8-scenario eval run costs roughly **$0.10–0.20**.
 
 #### Gemini speed and reliability tuning
 
