@@ -7,7 +7,7 @@ Claude's tool calls are predictable and easy to log.
 
 from typing import Any
 
-from pawpal_system import Owner, Pet, Task, Scheduler
+from pawpal_system import Owner, Pet, Task, Scheduler, Employee
 from rag import retrieve, format_retrievals
 from guardrails import validate_task_input, VALID_CATEGORIES, VALID_PRIORITIES, VALID_FREQUENCIES
 
@@ -124,6 +124,41 @@ TOOL_SCHEMAS = [
             "type": "object",
             "properties": {},
         },
+    },
+    {
+        "name": "list_employees",
+        "description": (
+            "List all employees, their available time today, and their currently "
+            "assigned tasks. Call this before assigning tasks or when the user asks "
+            "about staffing."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
+    },
+    {
+        "name": "add_employee",
+        "description": "Register a new employee with their available working time for today.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Employee's name."},
+                "available_minutes": {
+                    "type": "integer",
+                    "description": "Total working minutes available today (e.g. 240 for 4 hours).",
+                },
+            },
+            "required": ["name", "available_minutes"],
+        },
+    },
+    {
+        "name": "assign_tasks_to_employees",
+        "description": (
+            "Automatically assign all pending pet-care tasks to employees. "
+            "Tasks are assigned highest-priority first; each task goes to the "
+            "employee with the most remaining time who can still fit it. "
+            "Returns each employee's task list and any tasks that couldn't be "
+            "assigned due to insufficient time."
+        ),
+        "input_schema": {"type": "object", "properties": {}},
     },
     {
         "name": "lookup_care_guideline",
@@ -294,6 +329,47 @@ def detect_conflicts(owner: Owner) -> dict[str, Any]:
     return {"conflict_count": len(warnings), "warnings": warnings}
 
 
+def list_employees(owner: Owner) -> dict[str, Any]:
+    if not owner.employees:
+        return {
+            "employees": [],
+            "note": "No employees registered yet. Use add_employee to add one.",
+        }
+    return {
+        "employees": [
+            {
+                "name": emp.name,
+                "available_minutes": emp.available_minutes,
+                "minutes_used": emp.minutes_used,
+                "minutes_remaining": emp.minutes_remaining,
+                "assigned_tasks": emp.assigned_tasks,
+            }
+            for emp in owner.employees
+        ]
+    }
+
+
+def add_employee(owner: Owner, name: str, available_minutes: int) -> dict[str, Any]:
+    if not name.strip():
+        raise ToolError("Employee name cannot be empty.")
+    if available_minutes <= 0:
+        raise ToolError("available_minutes must be greater than 0.")
+    for emp in owner.employees:
+        if emp.name.lower() == name.lower():
+            raise ToolError(f"An employee named {name!r} already exists.")
+    employee = Employee(name=name.strip(), available_minutes=available_minutes)
+    owner.add_employee(employee)
+    return {"status": "added", "employee": employee.get_summary()}
+
+
+def assign_tasks_to_employees(owner: Owner) -> dict[str, Any]:
+    if not owner.employees:
+        raise ToolError("No employees registered. Use add_employee to add employees first.")
+    if not owner.pets:
+        raise ToolError("No pets registered. There are no tasks to assign.")
+    return owner.assign_tasks_to_employees()
+
+
 def lookup_care_guideline(query: str, species: str | None = None, breed: str | None = None) -> dict[str, Any]:
     results = retrieve(query, species=species, breed=breed, top_k=2)
     return {
@@ -324,6 +400,9 @@ def dispatch(tool_name: str, tool_input: dict[str, Any], owner: Owner) -> dict[s
         "mark_task_complete": lambda: mark_task_complete(owner, **tool_input),
         "generate_schedule": lambda: generate_schedule(owner),
         "detect_conflicts": lambda: detect_conflicts(owner),
+        "list_employees": lambda: list_employees(owner),
+        "add_employee": lambda: add_employee(owner, **tool_input),
+        "assign_tasks_to_employees": lambda: assign_tasks_to_employees(owner),
         "lookup_care_guideline": lambda: lookup_care_guideline(**tool_input),
     }
     if tool_name not in handlers:

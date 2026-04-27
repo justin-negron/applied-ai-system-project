@@ -93,33 +93,106 @@ class Pet:
 
 
 @dataclass
+class Employee:
+    name: str
+    available_minutes: int
+    assigned_tasks: List[dict] = field(default_factory=list)
+
+    @property
+    def minutes_used(self) -> int:
+        return sum(t["duration"] for t in self.assigned_tasks)
+
+    @property
+    def minutes_remaining(self) -> int:
+        return self.available_minutes - self.minutes_used
+
+    def get_summary(self) -> str:
+        return (
+            f"{self.name} — {self.available_minutes}min available, "
+            f"{self.minutes_used}min assigned, {self.minutes_remaining}min remaining, "
+            f"{len(self.assigned_tasks)} tasks"
+        )
+
+
+@dataclass
 class Owner:
     name: str
     available_minutes: int
     pets: List[Pet] = field(default_factory=list)
+    employees: List[Employee] = field(default_factory=list)
 
     def add_pet(self, pet: Pet) -> None:
-        """Add a pet to this owner's list."""
         self.pets.append(pet)
 
+    def add_employee(self, employee: Employee) -> None:
+        self.employees.append(employee)
+
     def get_all_tasks(self) -> List[Task]:
-        """Get all tasks across all pets."""
         all_tasks = []
         for pet in self.pets:
             all_tasks.extend(pet.tasks)
         return all_tasks
 
     def get_all_pending_tasks(self) -> List[Task]:
-        """Get all pending tasks across all pets."""
         pending = []
         for pet in self.pets:
             pending.extend(pet.get_pending_tasks())
         return pending
 
+    def assign_tasks_to_employees(self) -> dict:
+        """Greedy assignment: highest-priority tasks first, to the employee
+        with the most remaining time who can still fit the task."""
+        for emp in self.employees:
+            emp.assigned_tasks = []
+
+        pending = []
+        for pet in self.pets:
+            for task in pet.get_pending_tasks():
+                pending.append((pet, task))
+
+        pending.sort(key=lambda x: (PRIORITY_ORDER.get(x[1].priority, 99), x[1].duration))
+
+        unassigned = []
+        for pet, task in pending:
+            eligible = [e for e in self.employees if e.minutes_remaining >= task.duration]
+            if eligible:
+                # Pick the least-loaded employee who can still fit the task.
+                # This balances work across employees rather than concentrating it.
+                best = min(eligible, key=lambda e: e.minutes_used)
+                best.assigned_tasks.append({
+                    "pet": pet.name,
+                    "task": task.name,
+                    "category": task.category,
+                    "duration": task.duration,
+                    "priority": task.priority,
+                })
+            else:
+                unassigned.append({
+                    "pet": pet.name,
+                    "task": task.name,
+                    "duration": task.duration,
+                    "priority": task.priority,
+                })
+
+        return {
+            "assignments": {
+                emp.name: {
+                    "available_minutes": emp.available_minutes,
+                    "minutes_used": emp.minutes_used,
+                    "minutes_remaining": emp.minutes_remaining,
+                    "tasks": emp.assigned_tasks,
+                }
+                for emp in self.employees
+            },
+            "unassigned": unassigned,
+        }
+
     def get_summary(self) -> str:
-        """Return a brief description of the owner."""
         pet_names = ", ".join(p.name for p in self.pets) if self.pets else "No pets"
-        return f"{self.name} - {self.available_minutes}min available - Pets: {pet_names}"
+        return (
+            f"{self.name} — {self.available_minutes}min available — "
+            f"Pets: {pet_names} — Employees: {len(self.employees)}"
+        )
 
 
 @dataclass
