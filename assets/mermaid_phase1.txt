@@ -1,0 +1,44 @@
+classDiagram                                                                                                                    
+      class Owner {                                                                                                                                                         
+          +String name                                                                                                                                                      
+          +int available_minutes
+          +Pet pet                                                                                                                                                          
+          +get_summary() String
+      }                                                                                                                                                                     
+   
+      class Pet {                                                                                                                                                           
+          +String name
+          +String species
+          +String breed
+          +int age
+          +get_summary() String
+      }
+
+      class Task {
+          +String name
+          +String category
+          +int duration
+          +String priority                                                                                                                                                  
+          +bool completed
+          +mark_complete() void                                                                                                                                             
+          +get_summary() String
+      }
+
+      class Scheduler {
+          +List~Task~ tasks
+          +int available_minutes
+          +generate_plan() DailyPlan                                                                                                                                        
+      }
+                                                                                                                                                                            
+      class DailyPlan {
+          +List~Task~ scheduled_tasks
+          +List~Task~ skipped_tasks
+          +int total_time_used                                                                                                                                              
+          +display() String
+          +get_reasoning() String                                                                                                                                           
+      }           
+
+      Owner "1" --> "1" Pet : has                                                                                                                                           
+      Owner "1" --> "*" Task : creates
+      Scheduler "1" --> "*" Task : considers                                                                                                                                
+      Scheduler "1" --> "1" DailyPlan : generates

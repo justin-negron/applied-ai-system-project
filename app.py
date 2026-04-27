@@ -1,15 +1,30 @@
+import os
+
 import streamlit as st
+from dotenv import load_dotenv
+
 from pawpal_system import Owner, Pet, Task, Scheduler
+
+load_dotenv()
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
 # Initialize session state - only runs once per session
 if "owner" not in st.session_state:
     st.session_state.owner = None
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history = []
+if "chat_traces" not in st.session_state:
+    # Reasoning traces, one per assistant turn — kept separate from the message
+    # history that goes back to the model so we don't pollute the prompt.
+    st.session_state.chat_traces = []
 
 st.title("🐾 PawPal+")
 
-st.markdown("A pet care planning assistant that helps you stay on top of daily tasks.")
+st.markdown(
+    "A pet care planning assistant that helps you stay on top of daily tasks. "
+    "Talk to the AI agent below or fill out the structured forms further down."
+)
 
 st.divider()
 
@@ -31,6 +46,116 @@ else:
     st.success(f"Owner: {owner.name} | Available time: {owner.available_minutes} minutes")
     if st.button("Reset Profile"):
         st.session_state.owner = None
+        st.session_state.chat_history = []
+        st.session_state.chat_traces = []
+        st.rerun()
+
+st.divider()
+
+# --- AI Agent Chat ---
+st.subheader("🤖 Chat with PawPal+ Agent")
+
+if st.session_state.owner is None:
+    st.info("Set up your owner profile to start chatting with the agent.")
+elif not os.getenv("ANTHROPIC_API_KEY"):
+    st.warning(
+        "**ANTHROPIC_API_KEY is not set.** The chat agent needs an Anthropic API key. "
+        "Add `ANTHROPIC_API_KEY=...` to a `.env` file in the project root, then restart the app. "
+        "You can still use the forms below."
+    )
+else:
+    st.caption(
+        "Try: _\"I just got a 3-year-old Lab named Cooper. Set up his morning walk routine.\"_  \n"
+        "Or: _\"How long should I walk a French Bulldog in the summer?\"_"
+    )
+
+    # Render existing conversation
+    for i, msg in enumerate(st.session_state.chat_history):
+        with st.chat_message(msg["role"]):
+            content = msg["content"] if isinstance(msg["content"], str) else "(tool messages)"
+            st.markdown(content)
+            # Show the reasoning trace under the assistant turn that produced it.
+            if msg["role"] == "assistant":
+                trace_idx = sum(
+                    1 for m in st.session_state.chat_history[: i + 1] if m["role"] == "assistant"
+                ) - 1
+                if 0 <= trace_idx < len(st.session_state.chat_traces):
+                    trace = st.session_state.chat_traces[trace_idx]
+                    with st.expander(
+                        f"🔎 Reasoning trace ({len(trace['steps'])} steps, "
+                        f"{len(trace['tools_called'])} tool calls"
+                        + (f", confidence {trace['confidence']:.2f}" if trace["confidence"] else "")
+                        + ")"
+                    ):
+                        for step in trace["steps"]:
+                            kind = step["kind"]
+                            if kind == "thinking":
+                                st.markdown(f"💭 **Thinking:** {step['payload']['text'][:400]}...")
+                            elif kind == "tool_call":
+                                st.markdown(
+                                    f"🔧 **Tool call:** `{step['payload']['name']}`  \n"
+                                    f"```json\n{step['payload']['input']}\n```"
+                                )
+                            elif kind == "tool_result":
+                                marker = "❌" if step["payload"].get("is_error") else "✅"
+                                output = step["payload"].get("output", "")
+                                st.markdown(
+                                    f"{marker} **Tool result:** `{step['payload']['name']}`"
+                                )
+                                st.code(output[:800], language="json")
+                            elif kind == "text":
+                                pass  # Already shown in the chat bubble above.
+                            elif kind == "error":
+                                st.error(f"⚠️ {step['payload']}")
+
+    # Chat input
+    user_input = st.chat_input("Ask the agent...")
+    if user_input:
+        # Render user turn immediately
+        with st.chat_message("user"):
+            st.markdown(user_input)
+
+        # Run agent — import inside the branch so import errors don't crash the page
+        try:
+            from agent import run_agent
+
+            with st.spinner("Agent thinking..."):
+                # Build a flat history for the model — only role+content text.
+                # We do NOT pass the full assistant content (which may include
+                # tool_use blocks from the rendered trace) because each user
+                # message starts a fresh tool loop.
+                history_for_model = [
+                    {"role": m["role"], "content": m["content"]}
+                    for m in st.session_state.chat_history
+                    if isinstance(m["content"], str)
+                ]
+                result = run_agent(
+                    user_input,
+                    st.session_state.owner,
+                    conversation_history=history_for_model,
+                )
+
+            with st.chat_message("assistant"):
+                st.markdown(result.text)
+
+            # Persist UI history
+            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            st.session_state.chat_history.append({"role": "assistant", "content": result.text})
+            st.session_state.chat_traces.append(
+                {
+                    "steps": [{"kind": s.kind, "payload": s.payload} for s in result.steps],
+                    "tools_called": result.tools_called,
+                    "confidence": result.confidence,
+                    "turns_used": result.turns_used,
+                }
+            )
+            st.rerun()
+        except Exception as e:
+            st.error(f"Agent error: {type(e).__name__}: {e}")
+
+    if st.button("Clear chat", key="clear_chat"):
+        st.session_state.chat_history = []
+        st.session_state.chat_traces = []
         st.rerun()
 
 st.divider()

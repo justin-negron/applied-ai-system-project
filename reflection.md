@@ -94,3 +94,31 @@ If I had another iteration, I'd add time-of-day scheduling. Right now tasks just
 **c. Key takeaway**
 
 The biggest thing I learned is that AI is an incredible coding partner, but you have to stay in the driver's seat. It's tempting to just accept whatever it generates, but the moments where I pushed back — like keeping tasks on Pet instead of Owner, or choosing a greedy algorithm over something fancier — those decisions shaped the whole project. AI can write code fast, but it doesn't know your constraints, your users, or what "simple enough" means for your specific situation. Being the lead architect means knowing when to say "no, let's keep it simpler" and when to say "actually, let's make this smarter." That judgment is the human's job.
+
+---
+
+## 6. Final Phase — Applied AI Extension
+
+For the final project, I extended PawPal+ with an applied AI layer that turns the original form-based planner into a conversational, RAG-grounded agent. The deterministic Module 2 backend (Owner/Pet/Task/Scheduler) is unchanged — the AI sits on top, orchestrating the existing operations through Claude tool calls.
+
+**a. The required AI feature: agentic workflow with multi-step reasoning**
+
+I chose an agentic workflow because pet care planning naturally decomposes into discrete actions (look up exercise needs → add task → check for conflicts → generate schedule). Wrapping each existing `pawpal_system` method as a tool let me build the agent in `agent.py` as a manual Claude tool-calling loop. Every step — thinking blocks, tool inputs, tool results, the final text, the agent's confidence rating — is captured as an `AgentStep` and exposed in the Streamlit reasoning-trace expander. This satisfies the "observable intermediate steps" stretch criterion: nothing about the agent's process is hidden.
+
+**b. The RAG enhancement (stretch)**
+
+I curated five markdown guidelines in `knowledge/` covering breed-specific exercise needs, medication cadences, grooming, cat basics, and emergency warning signs. The retriever in `rag.py` chunks each doc by `##` heading and scores chunks with term frequency plus a heading-match boost, with optional species/breed bonuses. No embeddings — at this knowledge base size the keyword approach is more debuggable and easier to test. The agent must call `lookup_care_guideline` before recommending durations or cadences, and the system prompt enforces "cite the source filename or section heading." This means breed-specific advice is grounded in the knowledge base, not invented from training data.
+
+**c. Reliability and safety**
+
+Two layers of testing: 30 new unit tests for the AI layer (RAG correctness, guardrail patterns, tool dispatch) on top of the original 13, all of which run offline in under a second; and a live evaluation harness (`eval_agent.py`) that runs 8 end-to-end scenarios and asserts behavioral signals (was the right tool called, was the response grounded, was diagnosis avoided). For safety, `guardrails.py` has explicit regex patterns for diagnosis and dosage requests — these refuse the input *before* any API call, so token spend and the risk of an unsafe completion are both eliminated. A safety footer appends a "see your vet" disclaimer to any response touching health topics.
+
+**d. AI collaboration on this phase**
+
+Helpful: when I described the agent's observability needs, Claude suggested the `AgentStep` dataclass + JSONL logger pattern. It cleanly separated "what happens during a turn" from "what the model returns to the user," and it gave me the reasoning trace UI nearly for free.
+
+Flawed: my first RAG scoring function (suggested by Claude as a starting point) used `overlap / sqrt(|query| * |chunk|)`. The intuition was sensible — normalize by chunk size — but in practice it caused short chunks with incidental keyword matches to beat the actual answer chunk. For the query "heartworm meds cadence", the flea/tick section won because it was shorter and happened to contain the word "heartworm" in passing. I caught it by writing test queries before integrating, swapped to TF + heading-boost scoring, and verified all five test queries returned the right top result.
+
+**e. What this taught me about AI and problem-solving**
+
+The biggest lesson is that **the boundary between AI and deterministic code is where reliability lives**. Every place where the AI could go off the rails (invalid task durations, made-up dosages, diagnoses, scheduling that ignores the time budget) is now backstopped by code that *will not let it*. The agent is the orchestrator; the validators, the scheduler, and the tests are the guarantees. That layering is what makes the system trustworthy enough to ship — not the model's intelligence, but the structure around it.
